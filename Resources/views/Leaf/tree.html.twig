@@ -1,1 +1,26 @@
-{{ tree | raw }}
+<div class="wbxtree">
+	<div class="wbxtree_menu">
+      	{% if extra_urls | length > 0 %}
+			<div class="btn-group pull-right" style="margin-left: 20px;">
+				<button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-expanded="false"><span class="fa fa-cog"></span></button>
+				<ul class="dropdown-menu" role="menu">
+					{% for url in extra_urls %}
+    					<li><a class="btn_{{ url.id }}" href="#">{{ url.name }}</a></li>
+					{% endfor %}
+				</ul>
+			</div>
+      	{% endif %}
+
+		<div class="btn-group pull-right">
+     		<button class="btn btn-default btn_add"><span class="fa fa-plus"></span></button>
+            <button class="btn btn-default btn_rename"><span class="fa fa-edit"></span></button>
+           	<button class="btn btn-default btn_delete"><span class="fa fa-trash"></span></button>
+      	</div>
+	</div>
+	<div class="wbxtree_tree">
+		{{ tree | raw }}
+	</div>
+	<div class="wbxtree_loading">
+		<img src="{{ asset('static/images/loader-medium.gif') }}">
+	</div>
+</div>

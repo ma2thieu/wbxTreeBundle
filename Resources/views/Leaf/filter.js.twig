@@ -1,0 +1,148 @@
+<script type="text/javascript">
+    var wbxtree = {
+        elem: null,
+        form_value: "",
+        form_name: "{{ form_name }}",
+
+
+        bindTree: function() {
+            var i, id, str, a, node;
+
+            str = $("#" + this.form_name).val();
+            if (str && str.length > 0) {
+                a = str.split(/[:,]/);
+
+                for (i in a) {
+                    id = this.form_name + "_" + a[i];
+                    node = this.getRef().get_node(id);
+
+                    if (node.hasOwnProperty("children") && node.children.length == 0) {
+                        this.getRef().select_node(id);
+                    }
+                }
+            }
+        },
+    
+        bindForm: function() {
+            var sel = this.getSel();
+            var id, node, i, j, k, atmp;
+
+            atmp = {};
+
+            for (i = 0; i < sel.length; i++) {
+                node = this.getRef().get_node(sel[i]);
+
+                this.getRef().open_node(node);
+                id = node.id.replace(this.form_name + "_", "");
+
+                if (node.parents.length > 0) {
+                    if (node.parents.length == 1) {
+                        var pid = id;
+                    }
+                    else {
+                        var pid = node.parents[node.parents.length - 2].replace(this.form_name + "_", "");
+                    }
+
+                    if (!atmp.hasOwnProperty(pid)) {
+                        atmp[pid] = [];
+                    }
+
+                    atmp[pid].push(id);
+                }
+            }
+
+            this.form_value = "";
+            for (i in atmp) {
+                this.form_value += atmp[i].join(":") + ",";
+            }
+
+            this.form_value = this.form_value.slice(0, - 1);
+
+            $("#" + this.form_name).val(this.form_value);
+        },
+
+        init: function(e) {
+            var that = this;
+
+            this.elem = e;
+
+            this.elem.jstree({
+                'core': {
+                    'check_callback' : true,
+                    'expand_selected_onload' : true,
+                    'themes': {
+                        'name': 'proton',
+                        'responsive': true
+                    }
+                },
+                "checkbox" : {
+                    "keep_selected_style" : false
+                },
+                "types" : 
+                    {%- if types is defined -%}
+                        {{- types | raw -}}
+                    {%- else -%}
+                        {
+                            "default" : {
+                                "icon" : false
+                            }
+                        }
+                    {%- endif -%},
+                "plugins" : [ "types", "wholerow", "checkbox" ]
+            })
+            .on("ready.jstree", function (e, data) {
+                console.log("ready");
+                
+                that.elem.find('li[data_lvl="1"]').each(function(i) {
+                    that.getRef().open_node($(this), null, false);
+                }); 
+            })
+            ;
+
+            this.bindTree();
+
+            this.init2();
+
+            this.unfreeze();
+        },
+
+        init2: function(e) {
+            var that = this;
+            this.elem.on("changed.jstree", function (e, data) {
+                that.bindForm();
+            });
+        },
+
+        freeze: function() {
+            this.elem.parent().children('.wbxtree_loading').show();
+        },
+
+        unfreeze: function() {
+            this.elem.parent().children('.wbxtree_loading').hide();
+        },
+
+        getRef: function() {
+            return this.elem.jstree(true);
+        },
+
+        getSel: function() {
+            var ref = this.getRef();
+            var sel = ref.get_selected();
+
+            if (!sel.length) { 
+                return false; 
+            }
+            else {
+                return sel;
+            }
+        }
+    };
+
+    $(document).ready(function() {
+        wbxtree.init($('.wbxtree_tree'));
+    });
+
+</script>
+
+
+

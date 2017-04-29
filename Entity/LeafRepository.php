@@ -8,46 +8,93 @@ use Gedmo\Tree\Entity\Repository\NestedTreeRepository;
 class LeafRepository extends NestedTreeRepository {
 
 
-    public function getRootHtmlTree($link_pattern = "", $path_ids = array(), $expand_all = false) {
+    public function getRootJsHtmlTree($id = "node", $with_root = true, $options = array()) {
         $root = $this->getRoot();
-        return $root ? $this->getHtmlTree($root, $link_pattern, $path_ids, $expand_all) : "";
+        return $root ? $this->getJsHtmlTree($root, $id, $with_root, $options) : "";
     }
 
-
-    public function getNotRootHtmlTree($link_pattern = "", $path_ids = array(), $expand_all = false) {
-        $tree = "";
-
-        $root = $this->getRoot();
-        if (!$root) {
-            return $tree;
-        }
-
-        foreach ($this->children($root, true) as $child) {
-            $tree .= $this->getHtmlTree($child, $link_pattern, $path_ids, $expand_all);
-        }
-
-        return $tree;
-    }
-
-
-    public function getNodeParams() {
-        return array(
-            'id'    => "getId",
-            'name'  => "getName",
-            'slug'  => "getSlug",
-            'lvl'   => "getLevel",
-        );
-    }
-
-
-    public function getHtmlTree($node, $link_pattern = "", $path_ids = array(), $expand_all = false) {
+    public function getJsHtmlTree($node, $id = "node", $with_root = true, $options = array()) {
         $a = array();
         foreach ($this->getNodeParams() as $k => $v) {
             $a[$k] = $node->$v();
         }
 
         $a['__children'] = $this->childrenHierarchy($node, false);
-        $tree = array($a);
+
+        if ($with_root) {
+            $tree = array($a);
+        }
+        else {
+            $tree = array();
+            foreach ($a['__children'] as $k) {
+                array_push($tree, $k);
+            }
+        }
+
+        return $this->_makeJsHtmlTree($tree, $id, $options);
+    }
+
+    private function _makeJsHtmlTree($nodes, $id, $options = array()) {
+        if (array_key_exists("decorateLi", $options)) {
+            $decorateLi = $options['decorateLi'];
+        }
+        else {
+            $decorateLi = function($node) use($id) {
+                return '<li id="' . $id . '_' . $node["id"] . '">';
+            };
+        }
+
+        if (array_key_exists("decorateVal", $options)) {
+            $decorateVal = $options['decorateVal'];
+        }
+        else {
+            $decorateVal = function($node) {
+                return '<a href="#">' . $node["name"] . '</a>';
+            };
+        }
+
+
+        $result = '<ul>';
+
+        foreach ($nodes as $node) {
+            $result .= $decorateLi($node);
+            $result .= $decorateVal($node);
+
+            $result .= $this->_makeJsHtmlTree($node["__children"], $id, $options);
+
+            $result .= '</li>';
+        }
+
+        $result .= '</ul>';
+
+        return $result;
+    }
+
+
+
+
+    public function getRootHtmlTree($link_pattern = "", $path_ids = array(), $expand_all = false, $with_root = true) {
+        $root = $this->getRoot();
+        return $root ? $this->getHtmlTree($root, $link_pattern, $path_ids, $expand_all, $with_root) : "";
+    }
+
+    public function getHtmlTree($node, $link_pattern = "", $path_ids = array(), $expand_all = false, $with_root = true) {
+        $a = array();
+        foreach ($this->getNodeParams() as $k => $v) {
+            $a[$k] = $node->$v();
+        }
+
+        $a['__children'] = $this->childrenHierarchy($node, false);
+
+        if ($with_root) {
+            $tree = array($a);
+        }
+        else {
+            $tree = array();
+            foreach ($a['__children'] as $k) {
+                array_push($tree, $k);
+            }
+        }
 
         return $this->_makeTree($tree, $link_pattern, $path_ids, $expand_all);
     }
@@ -110,6 +157,16 @@ class LeafRepository extends NestedTreeRepository {
         $result .= '</ul>';
 
         return $result;
+    }
+
+
+    public function getNodeParams() {
+        return array(
+            'id'    => "getId",
+            'name'  => "getName",
+            'slug'  => "getSlug",
+            'lvl'   => "getLevel",
+        );
     }
 
 

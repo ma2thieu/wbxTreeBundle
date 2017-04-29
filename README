@@ -2,7 +2,7 @@ wbxTreeBundle
 =============
 
 a Symfony2 Bundle to handle nested tree structure with Gedmo\NestedTree
-
+(include jstree)
 
 Installation
 ============

@@ -1,159 +1,261 @@
 <script type="text/javascript">
-    var wbxtree_active = {};
+    var wbxtree = {
+        elem: null,
+        processing_urls: false,
+        urls: [],
+        
+        url_add: '{{ url_add }}',
+        url_rename: '{{ url_rename }}',
+        url_move: '{{ url_move }}',
+        url_delete: '{{ url_delete }}',
 
-    $(document).ready(function() {
-            $("#tree")
-                .jstree({
-                    "plugins"   : [ "themes", "html_data", "ui", "crrm" ],
-                    "core"      : {
-                        "initially_open" : [ "node_{{ root.id }}" ]
-                    },
-                    "themes"    : {
-                        "theme" : "apple",
-                        "dots" : true,
-                        "icons" : false
-                    },
-                    "ui"        : {
-                        "select_limit" : 1,
-                        "initially_select" : [ "node_{{ root.id }}" ]
-                    }
-                })
-                .bind("select_node.jstree", function (event, data) {
-                    var o = data.rslt.obj;
-                    wbxtree_active = {
-                        'id' : o.attr("data_id"),
-                        'name' : o.attr("data_name"),
-                        'slug' : o.attr("data_slug"),
-                        'has_children' : o.children("ul").length > 0,
-                        'has_siblings' : o.parent("ul").children("li").length > 1,
-                    };
+        init: function(e) {
+            wbxtree.elem = e;
 
-                    if (wbxtree_active.slug == root_slug) {
-                        $("#menu_tree button#delete").attr("disabled", "disabled");
+            wbxtree.elem.jstree({
+                'core': {
+                    'check_callback' : true,
+                    'themes': {
+                        'name': 'proton',
+                        'responsive': true
                     }
-                    else {
-                        $("#menu_tree button#delete").removeAttr("disabled");
-                    }
-
-                    if (wbxtree_active.slug == root_slug) {
-                        $("#menu_tree button#move_left").attr("disabled", "disabled");
-                    }
-                    else {
-                        $("#menu_tree button#move_left").removeAttr("disabled");
-                    }
-
-                    if (wbxtree_active.has_siblings && slug != root_slug) {
-                        $("#menu_tree button#move_right").removeAttr("disabled");
-                    }
-                    else {
-                        $("#menu_tree button#move_right").attr("disabled", "disabled");
-                    }
-
-                    if (wbxtree_active.has_siblings && slug != root_slug) {
-                        $("#menu_tree button#move_up").removeAttr("disabled");
-                    }
-                    else {
-                        $("#menu_tree button#move_up").attr("disabled", "disabled");
-                    }
-
-                    if (wbxtree_active.has_siblings && slug != root_slug) {
-                        $("#menu_tree button#move_down").removeAttr("disabled");
-                    }
-                    else {
-                        $("#menu_tree button#move_down").attr("disabled", "disabled");
-                    }
-
-                    $("#menu_tree button#edit").removeAttr("disabled");
-                    $("#menu_tree input#name").val(wbxtree_active.name);
-                    $("#menu_tree input#slug").val(wbxtree_active.slug);
-                })
-                .bind("create.jstree", function (e, data) {
-                    var parent_id = data.rslt.parent == -1 ? root_id : data.rslt.parent.attr("id").replace("node_", "");
-                    var child_name = data.rslt.name;
-                    lock();
-                    $.post(
-                        wbxtree_url_add,
+                },
+                "types" : 
+                    {%- if types is defined -%}
+                        {{- types | raw -}}
+                    {%- else -%}
                         {
-                            "id" : parent_id,
-                            "name" : child_name
-                        },
-                        function (r) {
-                            if (r.status) {
-                                $(data.rslt.obj).attr("id", "node_" + r.id);
-                                $.each(r.params, function(k, v) {
-                                    $(data.rslt.obj).attr("data_" + k, v);
-                                });
+                            "default" : {
+                                "icon" : false
                             }
-                            else {
-                                $.jstree.rollback(data.rlbk);
-                                alert(r.message);
-                            }
-                            unlock();
                         }
-                    );
-                });
+                    {%- endif -%},
+                "plugins" : [ "dnd", "state", "types", "wholerow", "unique" ]
+            })
+            .on("create_node.jstree", function (e, data) {
+                console.log("create");
+                console.log(data);
+                console.log("create node " + data.node.text + " child of " + data.parent + " at position " + data.position);
 
-            var lock = function() {
-                $("#tree").jstree("lock");
-                $("#menu_btns").hide();
-                $("#menu_tree img#spinner").show();
-            };
+                var url = wbxtree.url_add
+                    .replace("PARENT_ID", data.parent.replace("node_", ""))
+                    .replace("POSITION", data.position)
+                ;
 
-            var unlock = function() {
-                $("#tree").jstree("unlock");
-                $("#menu_btns").show();
-                $("#menu_tree img#spinner").hide();
-            };
+                wbxtree.freeze();
 
-            $("#menu_tree button#add").click(function (e) {
-                $("#tree").jstree("create", null, "last", { "attr" : { "rel" : "folder" } });
-            });
+                $.ajax({
+                    type: "POST",
+                    url: url,
+                    data: {
+                        'wbxtree_leaf': {
+                            'name': data.node.text
+                        }
+                    },
+                })
+                .always(function() {
+                    wbxtree.unfreeze();
+                })
+                .done(function(d) {
+                    console.log(d);
 
-            $("#menu_tree button#edit").click(function (e) {
-                window.location = wbxtree_url_edit.replace("ID", wbxtree_active.id);
-            });
+                    wbxtree.getRef().set_id(data.node, "node_" + d.id);
+                    wbxtree.getRef().edit("node_" + d.id);
+                })
+                .fail(function(x) {
+                    wbxtree.onAjaxFail(x);
+                })
+                ;
+            })
+            .on("rename_node.jstree", function (e, data) {
+                console.log("rename");
+                console.log(data);
+                console.log("rename node " + data.old + " -> " + data.text);
 
-            $("#menu_tree button#move_left").click(function (e) {
-                window.location = wbxtree_url_move_left.replace("ID", wbxtree_active.id);
-            });
+                var url = wbxtree.url_rename
+                    .replace("ID", data.node.id.replace("node_", ""))
+                ;
 
-            $("#menu_tree button#move_right").click(function (e) {
-                window.location = wbxtree_url_move_right.replace("ID", wbxtree_active.id);
-            });
+                wbxtree.freeze();
 
-            $("#menu_tree button#move_up").click(function (e) {
-                window.location = wbxtree_url_move_up.replace("ID", wbxtree_active.id);
-            });
+                $.ajax({
+                    type: "POST",
+                    url: url,
+                    data: {
+                        'wbxtree_leaf': {
+                            'name': data.text
+                        }
+                    },
+                })
+                .always(function() {
+                    wbxtree.unfreeze();
+                })
+                .done(function(d) {
+                    console.log(d);
+                })
+                .fail(function(x) {
+                    wbxtree.onAjaxFail(x);
+                })
+                ;
+            })
+            .on("move_node.jstree", function (e, data) {
+                console.log("move");
+                console.log(data);
+                console.log(data.node.id + " move to " + data.parent + " at position " + data.position);
+    
+                var url = wbxtree.url_move
+                    .replace("ID", data.node.id.replace("node_", ""))
+                    .replace("PARENT_ID", data.parent.replace("node_", ""))
+                    .replace("POSITION", data.position)
+                ;
 
-            $("#menu_tree button#move_down").click(function (e) {
-                window.location = wbxtree_url_move_down.replace("ID", wbxtree_active.id);
-            });
+                wbxtree.freeze();
+                
+                wbxtree.getUrl(url);
+            })
+            .on("delete_node.jstree", function (e, data) {
+                console.log("delete");
+                console.log(data);
+                console.log("delete node " + data.node.id);
 
-            $("#menu_tree button#delete").click(function (e) {
-                if (confirm("Are you sure you want to delete this folder ?")) {
-                    lock();
-                    $('input#wbxtree_leaf_delete_id').val(wbxtree_active.id);
-                    $('form#wbxtree_leaf_delete_form_form').submit();
+                var url = wbxtree.url_delete
+                    .replace("ID", data.node.id.replace("node_", ""))
+                ;
+
+                wbxtree.freeze();
+
+                $.ajax({
+                    type: "POST",
+                    url: url,
+                    data: {
+                        'wbxtree_leaf': {
+                            'name': data.text
+                        }
+                    },
+                })
+                .always(function() {
+                    wbxtree.unfreeze();
+                })
+                .done(function(d) {
+                    console.log(d);
+                })
+                .fail(function(x) {
+                    wbxtree.onAjaxFail(x);
+                })
+                ;
+            })
+
+            wbxtree.elem.parent().children('.wbxtree_menu').find('.btn_add').on("click", function() {
+                var sel = wbxtree.getSel();
+                sel = sel[0];
+
+                sel = wbxtree.getRef().create_node(sel);
+                if (sel) {
+                    wbxtree.getRef().edit(sel);
                 }
             });
 
-            var wbxtree_url_add = '{{ url_add }}';
-            var wbxtree_url_edit = '{{ url_edit }}';
-            var wbxtree_url_move_left = '{{ url_move_left }}';
-            var wbxtree_url_move_right = '{{ url_move_right }}';
-            var wbxtree_url_move_up = '{{ url_move_up }}';
-            var wbxtree_url_move_down = '{{ url_move_down }}';
+            wbxtree.elem.parent().children('.wbxtree_menu').find('.btn_rename').on("click", function() {
+                var sel = wbxtree.getSel();
+                sel = sel[0];
+                
+                wbxtree.getRef().edit(sel);
+            });
 
-            var root_slug = '{{ root.slug }}';
-            var root_id = '{{ root.id }}';
+            wbxtree.elem.parent().children('.wbxtree_menu').find('.btn_delete').on("click", function() {
+                if (confirm("Are you sure you want to delete this node and all its children ?")) {
+                    var sel = wbxtree.getSel();
+                    sel = sel[0];
+                
+                    wbxtree.getRef().delete_node(sel);
+                }
+            });
 
-            $("#menu_tree img#spinner").hide();
-            $("#menu_tree button#delete").attr("disabled", "disabled");
-            $("#menu_tree button#edit").attr("disabled", "disabled");
-            $("#menu_tree button#move_left").attr("disabled", "disabled");
-            $("#menu_tree button#move_right").attr("disabled", "disabled");
-            $("#menu_tree button#move_up").attr("disabled", "disabled");
-            $("#menu_tree button#move_down").attr("disabled", "disabled");
+            {% if extra_urls | length > 0 %}
+                {% for url in extra_urls %}
+                    wbxtree.elem.parent().children('.wbxtree_menu').find('.btn_{{ url.id }}').on("click", function() {
+                        var sel = wbxtree.getSel();
+                        sel = sel[0];
 
+                        var url = '{{ url.url }}';
+                        url = url.replace("ID", sel.replace("node_", ""));
+
+                        window.location = url;
+                    });
+                {% endfor %}
+            {% endif %}
+
+            wbxtree.unfreeze();
+        },
+
+        getRef: function() {
+            return wbxtree.elem.jstree(true);
+        },
+
+        getSel: function() {
+            var ref = wbxtree.getRef();
+            var sel = ref.get_selected();
+
+            if (!sel.length) { 
+                return false; 
+            }
+            else {
+                return sel;
+            }
+        },
+
+        getUrl: function(url) {
+            wbxtree.urls.push(url);
+            wbxtree.processUrls();
+        },
+
+        processUrls: function() {
+            if (wbxtree.urls.length > 0 && wbxtree.processing_urls === false) {
+                wbxtree.freeze();
+
+                wbxtree.processing_urls = true;
+                var url = wbxtree.urls[0];
+
+                $.ajax({
+                    type: "GET",
+                    url: url
+                })
+                .always(function() {
+                    wbxtree.unfreeze();
+                })
+                .done(function(data) {
+                    console.log(data);
+                    wbxtree.urls.shift();
+                    wbxtree.processing_urls = false;
+                    wbxtree.processUrls();
+                })
+                .fail(function(x) {
+                    wbxtree.onAjaxFail(x);
+                })
+                ;
+            }
+            else {
+                return;
+            }
+        },
+
+        onAjaxFail: function(x) {
+            console.log(x);
+            alert("An error has occured, please wait for the page to reload : \nError : " + (x.hasOwnProperty('responseJSON') ? x.responseJSON.message : x.statusText));
+            location.reload();
+        },
+
+        freeze: function() {
+            wbxtree.elem.parent().children('.wbxtree_loading').show();
+        },
+
+        unfreeze: function() {
+            wbxtree.elem.parent().children('.wbxtree_loading').hide();
+        }
+    };
+
+    $(document).ready(function() {
+        wbxtree.init($('.wbxtree_tree'));
     });
+
 </script>

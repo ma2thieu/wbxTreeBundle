@@ -2,11 +2,13 @@
 
 namespace wbx\TreeBundle\Controller;
 
-use Symfony\Component\HttpFoundation\Response;
 use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Method;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Route;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Template;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use wbx\TreeBundle\Entity\Leaf;
 use wbx\TreeBundle\Form\LeafType;
 use wbx\TreeBundle\Entity\LeafRepository;
@@ -24,41 +26,65 @@ class LeafController extends Controller {
         return new Leaf();
     }
 
+    protected function getExtraUrls() {
+        return array();
+    }
+
     protected function getRoot() {
         return $this->getRepository()->getRoot();
+    }
+
+    protected function getTree($repo) {
+        $tree_id = "node";
+        $tree = $repo->getRootJsHtmlTree($tree_id, true, array(
+            'decorateVal' => function($node) {
+                return $node["name"];
+            },
+            'decorateLi' => function($node) use($tree_id) {
+                $result = '<li id="' . $tree_id . '_' . $node["id"] . '"';
+
+                $params = array(
+                    'id'    => "getId",
+                    'name'  => "getName",
+                    'slug'  => "getSlug",
+                    'lvl'   => "getLevel",
+                );
+
+                foreach ($params as $k => $v) {
+                    $result .= ' data_' . $k . '="' . $node[$k] . '"';
+                }
+
+                if ($node["lvl"] == 0) {
+                    $result .= ' data_type="root"';
+                }
+
+                return $result .= '>';
+            }
+        ));
+
+        return $tree;
     }
 
 
     protected function index() {
         $repo = $this->getRepository();
 
-        $root = $this->getRoot();
-        if (!$root) {
-            throw $this->createNotFoundException('Unable to find root.');
-        }
+        $tree = $this->getTree($repo);
 
-        $tree = $repo->getHtmlTree($root, "", array(), true);
-
-        $url_add = $this->generateUrl($this->route_prefix . '_add');
-        $url_edit = $this->generateUrl($this->route_prefix . '_edit', array('id' => "ID"));
-        $url_delete = $this->generateUrl($this->route_prefix . '_delete');
-        $url_move_left = $this->generateUrl($this->route_prefix . '_move_left', array('id' => "ID"));
-        $url_move_right = $this->generateUrl($this->route_prefix . '_move_right', array('id' => "ID"));
-        $url_move_up = $this->generateUrl($this->route_prefix . '_move_up', array('id' => "ID"));
-        $url_move_down = $this->generateUrl($this->route_prefix . '_move_down', array('id' => "ID"));
+        $url_add = $this->generateUrl($this->route_prefix . '_add', array('parent_id' => "PARENT_ID", 'position' => "POSITION"));
+        $url_rename = $this->generateUrl($this->route_prefix . '_rename', array('id' => "ID"));
+        $url_delete = $this->generateUrl($this->route_prefix . '_delete', array('id' => "ID"));
+        $url_move = $this->generateUrl($this->route_prefix . '_move', array('id' => "ID", 'parent_id' => "PARENT_ID", 'position' => "POSITION"));
 
         $delete_form = $this->get('form.factory')->createNamedBuilder('wbxtree_leaf_delete', 'form', array())->add('id', 'hidden')->getForm();
 
         return array(
             'tree' => $tree,
-            'root'  =>  $root,
             'url_add'  =>  $url_add,
-            'url_edit'  =>  $url_edit,
+            'url_rename'  =>  $url_rename,
             'url_delete'  =>  $url_delete,
-            'url_move_left'  =>  $url_move_left,
-            'url_move_right'  =>  $url_move_right,
-            'url_move_up'  =>  $url_move_up,
-            'url_move_down'  =>  $url_move_down,
+            'url_move'  =>  $url_move,
+            'extra_urls'  =>  $this->getExtraUrls(),
             'delete_form'  =>  $delete_form->createView(),
         );
     }
@@ -72,41 +98,65 @@ class LeafController extends Controller {
         return $entity;
     }
 
-    protected function add() {
+    protected function add($parent_id, $position) {
+        $em = $this->getDoctrine()->getManager();
         $request = $this->getRequest();
 
-        $parent_id = $request->request->get('id');
-        $child_name = $request->request->get('name');
-
-        $em = $this->getDoctrine()->getManager();
-
         $parent = $this->getRepository()->find($parent_id);
-
         if (!$parent) {
-            $response = new Response(json_encode(array(
-                'status'    => false,
-                'message'   => "there is no node with id = " . $parent_id,
-                'id'        => -1
-            )));
+            return new JsonResponse(array('message' => "parent id = " . $parent_id . " not found"), 404);
         }
         else {
-            $entity = $this->addCreateEntity($child_name, $parent);
-            $em->persist($entity);
-            $em->flush();
+            $entity = $this->addCreateEntity($request->request->get('name', 'New node'), $parent);
 
-            $response = new Response(json_encode(
-                array(
-                    'status'    => true,
-                    'message'   => "",
-                    'id'   => $entity->getId(),
-                    'params'    => $entity->getArrayParams()
-                )
-            ));
+            $form = $this->createForm(new LeafType(), $entity);
+            $form->submit($request);
+
+            if ($form->isValid()) {
+                $em->persist($entity);
+                $em->flush();
+
+                $this->setPosition($entity, $position);
+
+                $em->persist($entity);
+                $em->flush();
+
+                return new JsonResponse(array(
+                    'id' => $entity->getId(),
+                    'message' => "New node successfully created"
+                ), 200);
+            }
+            else {
+                return new JsonResponse(array('message' => "form invalid"), 404);
+            }
         }
+    }
 
-        $response->headers->set('Content-Type', 'application/json');
 
-        return $response;
+    protected function rename($id) {
+        $em = $this->getDoctrine()->getManager();
+        $request = $this->getRequest();
+
+        $entity = $this->getRepository()->find($id);
+        if (!$entity) {
+            return new JsonResponse(array('message' => "entity id = " . $id . " not found"), 404);
+        }
+        else {
+            $form = $this->createForm(new LeafType(), $entity);
+            $form->submit($request);
+
+            if ($form->isValid()) {
+                $em->persist($entity);
+                $em->flush();
+
+                return new JsonResponse(array(
+                    'message' => "Node successfully renamed"
+                ), 200);
+            }
+            else {
+                return new JsonResponse(array('message' => "form invalid"), 404);
+            }
+        }
     }
 
 
@@ -115,136 +165,74 @@ class LeafController extends Controller {
         $em->remove($entity);
     }
 
-    protected function delete() {
+    protected function delete($id) {
+        $em = $this->getDoctrine()->getManager();
         $request = $this->getRequest();
 
-        $delete_form = $this->get('form.factory')->createNamedBuilder('wbxtree_leaf_delete', 'form', array())->add('id', 'hidden')->getForm();
-        $delete_form->submit($request);
-
-        if ($delete_form->isValid()) {
-            $values = $request->request->get('wbxtree_leaf_delete');
-            $id = $values["id"];
-
-            $em = $this->getDoctrine()->getManager();
-            $repo = $this->getRepository();
-            $entity = $repo->find($id);
-
-            if (!$entity) {
-                $this->get('session')->getFlashBag()->add('error', "entity id = " . $id . " not found");
-            }
-            else if ($entity->getSlug() == "root") {
-                $this->get('session')->getFlashBag()->add('error', 'ROOT cannot be deleted');
-            }
-            else {
-                $this->doDeleteEntity($entity);
-                $em->flush();
-
-                $this->get('session')->getFlashBag()->add('info', 'Tag successfully deleted');
-            }
+        $entity = $this->getRepository()->find($id);
+        if (!$entity) {
+            return new JsonResponse(array('message' => "entity id = " . $id . " not found"), 404);
         }
-        else {
-            $this->get('session')->getFlashBag()->add('error', "form invalid");
+
+        if ($entity->isRoot()) {
+            return new JsonResponse(array('message' => "ROOT cannot be deleted"), 404);
         }
+
+        $this->doDeleteEntity($entity);
+        $em->flush();
+
+        return new JsonResponse(array(
+            'message' => "Node successfully deleted"
+        ), 200);
     }
 
 
-    protected function moveLeft($id) {
+    protected function move($id, $parent_id, $position) {
         $em = $this->getDoctrine()->getManager();
 
         $entity = $this->getRepository()->find($id);
         if (!$entity) {
-            $this->get('session')->getFlashBag()->add('error', "entity id = " . $id . " not found");
+            return new JsonResponse(array('message' => "entity id = " . $entity_id . " not found"), 404);
         }
         else if ($entity->getSlug() == "root") {
-            $this->get('session')->getFlashBag()->add('error', 'ROOT cannot be moved');
+            return new JsonResponse(array('message' => 'ROOT cannot be moved'), 404);
         }
         else {
-            $parent = $entity->getParent();
+            $children_ids = $this->getRepository()->getChildrenIds($id, false);
+
+            $parent = $this->getRepository()->find($parent_id);
             if (!$parent) {
-                $this->get('session')->getFlashBag()->add('error', "parent not found");
+                return new JsonResponse(array('message' => "parent id = " . $id . " not found"), 404);
+            }
+            else if (in_array($parent->getId(), $children_ids)) {
+                return new JsonResponse(array('message' => 'A node cannot be moved to one of its children'), 404);
             }
             else {
-                $grandparent = $parent->getParent();
-                if (!$grandparent) {
-                    $this->get('session')->getFlashBag()->add('error', "grand parent not found");
-                }
-                else {
-                    $entity->setParent($grandparent);
-                    $em->persist($entity);
-                    $em->flush();
-
-                    $this->get('session')->getFlashBag()->add('info', 'Tag successfully moved to the left.');
-                }
-            }
-        }
-    }
-
-
-    protected function moveRight($id) {
-        $em = $this->getDoctrine()->getManager();
-
-        $entity = $this->getRepository()->find($id);
-        if (!$entity) {
-            $this->get('session')->getFlashBag()->add('error', "entity id = " . $id . " not found");
-        }
-        else if ($entity->getSlug() == "root") {
-            $this->get('session')->getFlashBag()->add('error', 'ROOT cannot be moved');
-        }
-        else {
-            $prev_siblings = $this->getRepository()->getPrevSiblings($entity);
-            if (count($prev_siblings) < 1) {
-                $this->get('session')->getFlashBag()->add('error', "previous sibling not found");
-            }
-            else {
-                $prev_sibling = $prev_siblings[count($prev_siblings) - 1];
-                $entity->setParent($prev_sibling);
+                $entity->setParent($parent);
                 $em->persist($entity);
                 $em->flush();
 
-                $this->get('session')->getFlashBag()->add('info', 'Tag successfully moved to the right.');
+                $this->setPosition($entity, $position);
+
+                $em->persist($entity);
+                $em->flush();
+
+                return new JsonResponse(array('message' => "Node successfully moved"), 200);
             }
         }
     }
 
 
-    protected function moveUp($id) {
-        $em = $this->getDoctrine()->getManager();
+    protected function setPosition(&$entity, $position) {
+        $prev_siblings = $this->getRepository()->getPrevSiblings($entity);
 
-        $entity = $this->getRepository()->find($id);
-
-        if (!$entity) {
-            $this->get('session')->getFlashBag()->add('error', "entity id = " . $id . " not found");
+        $d = $position - count($prev_siblings);
+        if ($d > 0) {
+            $this->getRepository()->moveDown($entity, $d);
         }
-        else if ($entity->getSlug() == "root") {
-            $this->get('session')->getFlashBag()->add('error', 'ROOT cannot be moved');
-        }
-        else {
-            $this->getRepository()->moveUp($entity);
-            $em->flush();
-
-            $this->get('session')->getFlashBag()->add('info', 'Tag successfully moved up.');
+        else if ($d < 0) {
+            $this->getRepository()->moveUp($entity, abs($d));
         }
     }
-
-
-    protected function moveDown($id) {
-        $em = $this->getDoctrine()->getManager();
-
-        $entity = $this->getRepository()->find($id);
-
-        if (!$entity) {
-            $this->get('session')->getFlashBag()->add('error', "entity id = " . $id . " not found");
-        }
-        else if ($entity->getSlug() == "root") {
-            $this->get('session')->getFlashBag()->add('error', 'ROOT cannot be moved');
-        }
-        else {
-            $this->getRepository()->moveDown($entity);
-            $em->flush();
-
-            $this->get('session')->getFlashBag()->add('info', 'Tag successfully moved down.');
-        }
-    }
-
 
 }

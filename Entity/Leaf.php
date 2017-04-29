@@ -111,6 +111,18 @@ class Leaf {
         return $this->lvl;
     }
 
+    public function getLeftId() {
+        return $this->lft;
+    }
+
+    public function getRightId() {
+        return $this->rgt;
+    }
+
+    public function getRootId() {
+        return $this->root;
+    }
+
     public function isRoot() {
         return is_null($this->parent) ? true : false;
     }

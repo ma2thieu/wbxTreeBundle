@@ -1,0 +1,134 @@
+<script type="text/javascript">
+    var wbxtree = {
+        elem: null,
+        checked: [],
+        form_name: "{{ form_name }}",
+
+        bindTree: function() {
+            $("#" + wbxtree.form_name).find('input:checkbox').each(function () {
+                var id = $(this).attr("id").replace(wbxtree.form_name + "_", "");
+                
+                if ($(this).is(':checked')) {
+                    wbxtree.getRef().select_node('node_' + id);
+                }
+                else {
+                    wbxtree.getRef().deselect_node('node_' + id);
+                }
+            });
+        },
+    
+        bindForm: function() {
+            var sel = wbxtree.getSel();
+            var id, node, i, j, k;
+
+            wbxtree.checked = [];
+
+            for (i = 0; i < sel.length; i++) {
+                node = wbxtree.getRef().get_node(sel[i]);
+
+                wbxtree.getRef().open_node(node);
+                
+                id = node.id.replace("node_", "");
+                if ($.inArray(id, wbxtree.checked) == -1 && id != "#") {
+                    wbxtree.checked.push(id);
+                }
+
+                for (k = 0; k < node.parents.length; k++) {
+                    id = node.parents[k].replace("node_", "");
+                    if ($.inArray(id, wbxtree.checked) == -1 && id != "#") {
+                        wbxtree.checked.push(id);
+                    }
+                }
+            }
+
+            $("#" + wbxtree.form_name).find('input:checkbox').each(function () {
+                var id = $(this).attr("id").replace(wbxtree.form_name + "_", "");
+                $(this).prop("checked", $.inArray(id, wbxtree.checked) !== -1);
+            });
+        },
+
+        init: function(e) {
+            var that = this;
+            
+            wbxtree.elem = e;
+
+            wbxtree.elem.jstree({
+                'core': {
+                    'check_callback' : true,
+                    'expand_selected_onload' : true,
+                    'themes': {
+                        'name': 'proton',
+                        'responsive': true
+                    }
+                },
+                "checkbox" : {
+                    "keep_selected_style" : false,
+                    "three_state" : false,
+                    "cascade" : "up, undetermined",
+                },
+                "types" : 
+                    {%- if types is defined -%}
+                        {{- types | raw -}}
+                    {%- else -%}
+                        {
+                            "default" : {
+                                "icon" : false
+                            }
+                        }
+                    {%- endif -%},
+                "plugins" : [ "types", "wholerow", "checkbox" ]
+            })
+            .on("ready.jstree", function (e, data) {
+                console.log("ready");
+
+                {% if open_all is defined and open_all %}
+                    that.getRef().open_all();
+                {% endif %}
+            })
+            ;
+
+            wbxtree.bindTree();
+
+            wbxtree.init2();
+
+            wbxtree.unfreeze();
+        },
+
+        init2: function(e) {
+            wbxtree.elem.on("changed.jstree", function (e, data) {
+                wbxtree.bindForm();
+            });
+        },
+
+        freeze: function() {
+            wbxtree.elem.parent().children('.wbxtree_loading').show();
+        },
+
+        unfreeze: function() {
+            wbxtree.elem.parent().children('.wbxtree_loading').hide();
+        },
+
+        getRef: function() {
+            return wbxtree.elem.jstree(true);
+        },
+
+        getSel: function() {
+            var ref = wbxtree.getRef();
+            var sel = ref.get_selected();
+
+            if (!sel.length) { 
+                return false; 
+            }
+            else {
+                return sel;
+            }
+        }
+    };
+
+    $(document).ready(function() {
+        wbxtree.init($('.wbxtree_tree'));
+    });
+
+</script>
+
+
