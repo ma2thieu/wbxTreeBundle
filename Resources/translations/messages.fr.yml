@@ -1,0 +1,13 @@
+wbxtree:
+  form:
+    name: Nom
+  btn:
+    add: Nouveau
+    edit: Modifier
+    delete: Supprimer
+    move:
+      left: Gauche
+      right: Droite
+      up: Haut
+      down: Bas
+

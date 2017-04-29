@@ -1,0 +1,32 @@
+<div id="menu_tree">
+    {% block wbxtree_menu_info %}
+        <div class="input-group input-group-sm">
+            <span class="input-group-addon"><span>Name</span></span>
+            <input id="name" type="text" class="form-control">
+        </div>
+        <div class="input-group input-group-sm">
+            <span class="input-group-addon"><span>ID</span></span>
+            <input id="slug" type="text" class="form-control">
+        </div>
+    {% endblock %}
+
+    <form id="wbxtree_leaf_delete_form_form" action="{{ url_delete }}" method="post">
+        {{ form_widget(delete_form) }}
+    </form>
+
+    <div id="menu_btns">
+        {% block wbxtree_menu_btns %}
+            <div class="btn-group">
+                <button id="add" class="btn btn-default btn-sm" href="#"><span class="glyphicon glyphicon-plus"></span> {% trans %}wbxtree.btn.add{% endtrans %}</button>
+                <button id="edit" class="btn btn-default btn-sm" href="#"><span class="glyphicon glyphicon-cog"></span> {% trans %}wbxtree.btn.edit{% endtrans %}</button>
+                <button id="delete" class="btn btn-default btn-sm" href="#"><span class="glyphicon glyphicon-trash"></span> {% trans %}wbxtree.btn.delete{% endtrans %}</button>
+            </div>
+            <div class="btn-group">
+                <button id="move_left" class="btn btn-default btn-sm" href="#"><span class="glyphicon glyphicon-arrow-left"></span> {% trans %}wbxtree.btn.move.left{% endtrans %}</button>
+                <button id="move_right" class="btn btn-default btn-sm" href="#"><span class="glyphicon glyphicon-arrow-right"></span> {% trans %}wbxtree.btn.move.right{% endtrans %}</button>
+                <button id="move_up" class="btn btn-default btn-sm" href="#"><span class="glyphicon glyphicon-arrow-up"></span> {% trans %}wbxtree.btn.move.up{% endtrans %}</button>
+                <button id="move_down" class="btn btn-default btn-sm" href="#"><span class="glyphicon glyphicon-arrow-down"></span> {% trans %}wbxtree.btn.move.down{% endtrans %}</button>
+            </div>
+        {% endblock %}
+    </div>
+</div>

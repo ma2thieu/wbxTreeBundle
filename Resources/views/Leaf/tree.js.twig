@@ -1,0 +1,159 @@
+<script type="text/javascript">
+    var wbxtree_active = {};
+
+    $(document).ready(function() {
+            $("#tree")
+                .jstree({
+                    "plugins"   : [ "themes", "html_data", "ui", "crrm" ],
+                    "core"      : {
+                        "initially_open" : [ "node_{{ root.id }}" ]
+                    },
+                    "themes"    : {
+                        "theme" : "apple",
+                        "dots" : true,
+                        "icons" : false
+                    },
+                    "ui"        : {
+                        "select_limit" : 1,
+                        "initially_select" : [ "node_{{ root.id }}" ]
+                    }
+                })
+                .bind("select_node.jstree", function (event, data) {
+                    var o = data.rslt.obj;
+                    wbxtree_active = {
+                        'id' : o.attr("data_id"),
+                        'name' : o.attr("data_name"),
+                        'slug' : o.attr("data_slug"),
+                        'has_children' : o.children("ul").length > 0,
+                        'has_siblings' : o.parent("ul").children("li").length > 1,
+                    };
+
+                    if (wbxtree_active.slug == root_slug) {
+                        $("#menu_tree button#delete").attr("disabled", "disabled");
+                    }
+                    else {
+                        $("#menu_tree button#delete").removeAttr("disabled");
+                    }
+
+                    if (wbxtree_active.slug == root_slug) {
+                        $("#menu_tree button#move_left").attr("disabled", "disabled");
+                    }
+                    else {
+                        $("#menu_tree button#move_left").removeAttr("disabled");
+                    }
+
+                    if (wbxtree_active.has_siblings && slug != root_slug) {
+                        $("#menu_tree button#move_right").removeAttr("disabled");
+                    }
+                    else {
+                        $("#menu_tree button#move_right").attr("disabled", "disabled");
+                    }
+
+                    if (wbxtree_active.has_siblings && slug != root_slug) {
+                        $("#menu_tree button#move_up").removeAttr("disabled");
+                    }
+                    else {
+                        $("#menu_tree button#move_up").attr("disabled", "disabled");
+                    }
+
+                    if (wbxtree_active.has_siblings && slug != root_slug) {
+                        $("#menu_tree button#move_down").removeAttr("disabled");
+                    }
+                    else {
+                        $("#menu_tree button#move_down").attr("disabled", "disabled");
+                    }
+
+                    $("#menu_tree button#edit").removeAttr("disabled");
+                    $("#menu_tree input#name").val(wbxtree_active.name);
+                    $("#menu_tree input#slug").val(wbxtree_active.slug);
+                })
+                .bind("create.jstree", function (e, data) {
+                    var parent_id = data.rslt.parent == -1 ? root_id : data.rslt.parent.attr("id").replace("node_", "");
+                    var child_name = data.rslt.name;
+                    lock();
+                    $.post(
+                        wbxtree_url_add,
+                        {
+                            "id" : parent_id,
+                            "name" : child_name
+                        },
+                        function (r) {
+                            if (r.status) {
+                                $(data.rslt.obj).attr("id", "node_" + r.id);
+                                $.each(r.params, function(k, v) {
+                                    $(data.rslt.obj).attr("data_" + k, v);
+                                });
+                            }
+                            else {
+                                $.jstree.rollback(data.rlbk);
+                                alert(r.message);
+                            }
+                            unlock();
+                        }
+                    );
+                });
+
+            var lock = function() {
+                $("#tree").jstree("lock");
+                $("#menu_btns").hide();
+                $("#menu_tree img#spinner").show();
+            };
+
+            var unlock = function() {
+                $("#tree").jstree("unlock");
+                $("#menu_btns").show();
+                $("#menu_tree img#spinner").hide();
+            };
+
+            $("#menu_tree button#add").click(function (e) {
+                $("#tree").jstree("create", null, "last", { "attr" : { "rel" : "folder" } });
+            });
+
+            $("#menu_tree button#edit").click(function (e) {
+                window.location = wbxtree_url_edit.replace("ID", wbxtree_active.id);
+            });
+
+            $("#menu_tree button#move_left").click(function (e) {
+                window.location = wbxtree_url_move_left.replace("ID", wbxtree_active.id);
+            });
+
+            $("#menu_tree button#move_right").click(function (e) {
+                window.location = wbxtree_url_move_right.replace("ID", wbxtree_active.id);
+            });
+
+            $("#menu_tree button#move_up").click(function (e) {
+                window.location = wbxtree_url_move_up.replace("ID", wbxtree_active.id);
+            });
+
+            $("#menu_tree button#move_down").click(function (e) {
+                window.location = wbxtree_url_move_down.replace("ID", wbxtree_active.id);
+            });
+
+            $("#menu_tree button#delete").click(function (e) {
+                if (confirm("Are you sure you want to delete this folder ?")) {
+                    lock();
+                    $('input#wbxtree_leaf_delete_id').val(wbxtree_active.id);
+                    $('form#wbxtree_leaf_delete_form_form').submit();
+                }
+            });
+
+            var wbxtree_url_add = '{{ url_add }}';
+            var wbxtree_url_edit = '{{ url_edit }}';
+            var wbxtree_url_move_left = '{{ url_move_left }}';
+            var wbxtree_url_move_right = '{{ url_move_right }}';
+            var wbxtree_url_move_up = '{{ url_move_up }}';
+            var wbxtree_url_move_down = '{{ url_move_down }}';
+
+            var root_slug = '{{ root.slug }}';
+            var root_id = '{{ root.id }}';
+
+            $("#menu_tree img#spinner").hide();
+            $("#menu_tree button#delete").attr("disabled", "disabled");
+            $("#menu_tree button#edit").attr("disabled", "disabled");
+            $("#menu_tree button#move_left").attr("disabled", "disabled");
+            $("#menu_tree button#move_right").attr("disabled", "disabled");
+            $("#menu_tree button#move_up").attr("disabled", "disabled");
+            $("#menu_tree button#move_down").attr("disabled", "disabled");
+
+    });
+</script>

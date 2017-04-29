@@ -1,0 +1,30 @@
+wbxTreeBundle
+=============
+
+a Symfony2 Bundle to handle nested tree structure with Gedmo\NestedTree
+
+
+Installation
+============
+
+Composer
+--------
+
+    "require": {
+        "wbx/tree-bundle": "*"
+    }
+
+    
+Add wbxTreeBundle to your application kernel
+--------------------------------------------
+
+	// app/AppKernel.php
+    public function registerBundles()
+    {
+        return array(
+            // ...
+            new wbx\TreeBundle\wbxTreeBundle(),
+            // ...
+        );
+    }
+
